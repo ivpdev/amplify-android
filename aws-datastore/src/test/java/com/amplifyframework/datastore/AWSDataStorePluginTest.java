@@ -199,8 +199,6 @@ public final class AWSDataStorePluginTest {
         // Setup objects
         Person person1 = createPerson("Test", "Dummy I");
         Person person2 = createPerson("Test", "Dummy II");
-        ArgumentMatcher<GraphQLRequest<String>> person1Matcher = getMatcherFor(person1);
-        ArgumentMatcher<GraphQLRequest<String>> person2Matcher = getMatcherFor(person2);
 
         // Mock responses for person 1
         doAnswer(invocation -> {
@@ -218,17 +216,17 @@ public final class AWSDataStorePluginTest {
             return mock(GraphQLOperation.class);
         }).when(mockApiPlugin).mutate(any(), any(), any());
 
+        HubAccumulator apiInteractionObserver =
+            HubAccumulator.create(HubChannel.DATASTORE, DataStoreChannelEventName.PUBLISHED_TO_CLOUD, 1)
+                .start();
+
         // Save person 1
         synchronousDataStore.save(person1);
         Person result1 = synchronousDataStore.get(Person.class, person1.getId());
         assertEquals(person1, result1);
 
-        HubAccumulator apiInteractionObserver =
-            HubAccumulator.create(HubChannel.DATASTORE, DataStoreChannelEventName.PUBLISHED_TO_CLOUD, 1)
-                .start();
         apiInteractionObserver.await();
-        verify(mockApiCategory, atLeastOnce())
-            .mutate(argThat(person1Matcher), any(), any());
+        verify(mockApiCategory).mutate(argThat(getMatcherFor(person1)), any(), any());
 
         // Mock responses for person 2
         doAnswer(invocation -> {
@@ -256,18 +254,19 @@ public final class AWSDataStorePluginTest {
         orchestratorInitObserver.await();
         assertRemoteSubscriptionsStarted();
 
+        apiInteractionObserver =
+            HubAccumulator.create(HubChannel.DATASTORE, DataStoreChannelEventName.PUBLISHED_TO_CLOUD, 1)
+                .start();
+
         // Save person 2
         synchronousDataStore.save(person2);
         Person result2 = synchronousDataStore.get(Person.class, person2.getId());
         assertEquals(person2, result2);
 
-        apiInteractionObserver =
-            HubAccumulator.create(HubChannel.DATASTORE, DataStoreChannelEventName.PUBLISHED_TO_CLOUD, 1)
-                .start();
         apiInteractionObserver.await();
 
         verify(mockApiCategory, atLeastOnce())
-            .mutate(argThat(person2Matcher), any(), any());
+            .mutate(argThat(getMatcherFor(person2)), any(), any());
     }
 
     private void assertRemoteSubscriptionsCancelled() {

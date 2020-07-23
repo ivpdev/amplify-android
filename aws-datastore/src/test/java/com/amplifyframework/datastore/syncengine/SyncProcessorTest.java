@@ -41,6 +41,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.shadows.ShadowLog;
 
 import java.util.HashSet;
 import java.util.List;
@@ -83,6 +84,8 @@ public final class SyncProcessorTest {
      */
     @Before
     public void setup() throws AmplifyException {
+        ShadowLog.stream = System.out;
+
         this.modelProvider =
             CompoundModelProvider.of(SystemModelsProviderFactory.create(), AmplifyModelProvider.getInstance());
 
@@ -390,10 +393,14 @@ public final class SyncProcessorTest {
             .mockFailure(new DataStoreException("Something timed out during sync.", "Nothing to do."));
 
         // Act: call hydrate.
-        assertTrue(syncProcessor.hydrate().blockingAwait(OP_TIMEOUT_MS, TimeUnit.MILLISECONDS));
+        assertTrue(
+            syncProcessor.hydrate()
+                .onErrorComplete()
+                .blockingAwait(OP_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        );
 
-        // Assert: one error per model.
-        assertEquals(modelProvider.models().size(), errorHandlerCallCount);
+        // Assert: sync process failed the first time the api threw an error
+        assertEquals(1, errorHandlerCallCount);
     }
 
     static final class RecentTimeWindow {

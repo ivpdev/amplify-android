@@ -15,6 +15,7 @@
 
 package com.amplifyframework.datastore.syncengine;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import androidx.annotation.NonNull;
 
@@ -60,7 +61,6 @@ public final class Orchestrator {
     private final StorageObserver storageObserver;
     private final AtomicReference<OrchestratorStatus> status;
     private final Semaphore startStopSemaphore;
-    private Completable initializationCompletable;
 
     /**
      * Constructs a new Orchestrator.
@@ -116,6 +116,7 @@ public final class Orchestrator {
      * Checks whether the orchestrator is {@link OrchestratorStatus#STARTED}.
      * @return True if the orchestrator is started, false otherwise.
      */
+    @SuppressWarnings("unused")
     public boolean isStarted() {
         return OrchestratorStatus.STARTED.equals(status.get());
     }
@@ -126,6 +127,7 @@ public final class Orchestrator {
      * @param onLocalStorageReady Callback to signal that it is safe to start interacting with the DataStore.
      * @return A Completable operation to start the sync engine orchestrator.
      */
+    @SuppressLint("CheckResult")
     @NonNull
     public synchronized Completable start(Action onLocalStorageReady) {
         if (!transitionToState(OrchestratorStatus.STARTED)) {
@@ -165,7 +167,14 @@ public final class Orchestrator {
                 LOG.debug("Orchestrator started.");
                 announceRemoteSyncStarted();
             })
-        ).doFinally(startStopSemaphore::release);
+        )
+        .doOnError(error -> {
+            LOG.warn("Orchestrator failed to start.", error);
+            startStopSemaphore.release();
+            //noinspection ResultOfMethodCallIgnored
+            stop().blockingAwait(ACQUIRE_PERMIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        })
+        .doFinally(startStopSemaphore::release);
     }
 
     /**
@@ -191,6 +200,7 @@ public final class Orchestrator {
         .doFinally(startStopSemaphore::release);
     }
 
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     private synchronized boolean transitionToState(OrchestratorStatus targetStatus) {
         OrchestratorStatus expectedCurrentStatus;
         switch (targetStatus) {
@@ -257,7 +267,7 @@ public final class Orchestrator {
         /**
          * The orchestrator is stopped and it is currently not performing any background processing. At this point
          * it is safe to start it. Only possible transition from this state should be to {@link #STARTING}
-         * which happens by invoking {@link #start()}
+         * which happens by invoking {@link #start(Action)}
          */
         STOPPED,
         /**

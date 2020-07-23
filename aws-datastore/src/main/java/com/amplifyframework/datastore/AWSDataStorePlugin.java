@@ -226,10 +226,9 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
 
     /**
      * Terminate use of the plugin.
-     * @throws AmplifyException On failure to terminate use of the plugin
      */
     @SuppressWarnings("unused")
-    synchronized void terminate() throws AmplifyException {
+    synchronized void terminate() {
         Throwable throwable = orchestrator.stop()
             .andThen(
                 Completable.fromAction(sqliteStorageAdapter::terminate)
@@ -472,6 +471,8 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
 
     private void beforeOperation(@NonNull final Runnable runnable) {
         Throwable throwable = Completable.fromAction(categoryInitializationsPending::await)
+            .timeout(PLUGIN_INIT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .andThen(initializeOrchestrator())
             .repeatUntil(() -> {
                 // Repeat until this is true or the blockingGet call times out.
                 synchronized (isOrchestratorReady) {
@@ -479,7 +480,7 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
                 }
             })
             .andThen(Completable.fromRunnable(runnable))
-            .blockingGet(PLUGIN_INIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            .blockingGet();
         if (!(throwable == null && isOrchestratorReady.get())) {
             if (!isOrchestratorReady.get()) {
                 LOG.warn("Failed to execute request because DataStore is not fully initialized.");
@@ -490,7 +491,7 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
     }
 
     private Completable initializeOrchestrator() {
-        if (api.getPlugins().isEmpty()) {
+        if (api.getPlugins().isEmpty() || orchestrator.isStarted()) {
             isOrchestratorReady.set(true);
             return Completable.complete();
         } else {
@@ -499,9 +500,10 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
                 // This callback is invoked when the local storage observer gets initialized.
                 isOrchestratorReady.set(true);
             })
-            .repeatUntil(() -> isOrchestratorReady.get())
+            .repeatUntil(isOrchestratorReady::get)
             .observeOn(Schedulers.io())
-            .subscribeOn(Schedulers.io());
+            .subscribeOn(Schedulers.io())
+            .onErrorComplete();
         }
     }
 
