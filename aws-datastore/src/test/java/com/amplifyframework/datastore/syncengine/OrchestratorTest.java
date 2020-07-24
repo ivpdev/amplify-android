@@ -28,7 +28,6 @@ import com.amplifyframework.datastore.storage.SynchronousStorageAdapter;
 import com.amplifyframework.hub.HubChannel;
 import com.amplifyframework.hub.HubEvent;
 import com.amplifyframework.testmodels.commentsblog.BlogOwner;
-import com.amplifyframework.testutils.EmptyAction;
 import com.amplifyframework.testutils.HubAccumulator;
 
 import org.junit.Test;
@@ -42,6 +41,7 @@ import io.reactivex.Observable;
 
 import static com.amplifyframework.datastore.syncengine.TestHubEventFilters.publicationOf;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -84,15 +84,17 @@ public final class OrchestratorTest {
                 modelSchemaRegistry,
                 localStorageAdapter,
                 appSync,
-                DataStoreConfiguration::defaults
+                DataStoreConfiguration::defaults,
+                Orchestrator.Mode.SYNC_VIA_API
             );
 
-        // Arrange: storage engine is running
-        orchestrator.start(EmptyAction.create()).blockingAwait();
+        // Arrange: orchestrator is running
+        orchestrator.start();
 
         // Act: Put BlogOwner into storage, and wait for it to complete.
         SynchronousStorageAdapter.delegatingTo(localStorageAdapter).save(susan);
 
+        // Assert that the event is published out to the API
         assertEquals(
             Collections.singletonList(susan),
             Observable.fromIterable(accumulator.await())
@@ -103,6 +105,7 @@ public final class OrchestratorTest {
                 .blockingGet()
         );
 
-        orchestrator.stop().blockingGet(ORCHESTRATOR_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        assertTrue(orchestrator.stop()
+            .blockingAwait(ORCHESTRATOR_TEST_TIMEOUT_MS, TimeUnit.MILLISECONDS));
     }
 }
