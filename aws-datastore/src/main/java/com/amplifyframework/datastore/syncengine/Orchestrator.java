@@ -17,6 +17,8 @@ package com.amplifyframework.datastore.syncengine;
 
 import android.content.Context;
 import androidx.annotation.NonNull;
+import androidx.core.util.ObjectsCompat;
+import androidx.core.util.Supplier;
 
 import com.amplifyframework.AmplifyException;
 import com.amplifyframework.core.Amplify;
@@ -54,7 +56,7 @@ public final class Orchestrator {
     private final SyncProcessor syncProcessor;
     private final MutationProcessor mutationProcessor;
     private final StorageObserver storageObserver;
-    private final Mode targetMode;
+    private final Supplier<Mode> targetMode;
     private final AtomicReference<Mode> currentMode;
     private final MutationOutbox mutationOutbox;
     private final CompositeDisposable disposables;
@@ -82,7 +84,7 @@ public final class Orchestrator {
             @NonNull final LocalStorageAdapter localStorageAdapter,
             @NonNull final AppSync appSync,
             @NonNull final DataStoreConfigurationProvider dataStoreConfigurationProvider,
-            @NonNull final Mode targetMode) {
+            @NonNull final Supplier<Mode> targetMode) {
         Objects.requireNonNull(modelSchemaRegistry);
         Objects.requireNonNull(modelProvider);
         Objects.requireNonNull(appSync);
@@ -114,7 +116,7 @@ public final class Orchestrator {
      * @return true if so, false otherwise.
      */
     public boolean isStarted() {
-        return targetMode.equals(currentMode.get());
+        return ObjectsCompat.equals(targetMode.get(), currentMode.get());
     }
 
     /**
@@ -143,11 +145,11 @@ public final class Orchestrator {
 
     private Completable transitionCompletable() {
         Mode current = currentMode.get();
+        Mode target = targetMode.get();
         LOG.info(String.format(Locale.US,
-            "DataStore orchestrator starting. Current mode = %s, target mode = %s.",
-            current, targetMode
+            "DataStore orchestrator starting. Current mode = %s, target mode = %s.", current, target
         ));
-        switch (targetMode) {
+        switch (target) {
             case STOPPED:
                 return transitionToStopped(current);
             case LOCAL_ONLY:
@@ -155,7 +157,7 @@ public final class Orchestrator {
             case SYNC_VIA_API:
                 return transitionToApiSync(current);
             default:
-                return unknownMode(targetMode);
+                return unknownMode(target);
         }
     }
 

@@ -95,7 +95,7 @@ public final class AWSDataStorePlugin extends DataStorePlugin<Void> {
             sqliteStorageAdapter,
             AppSyncClient.via(api),
             () -> pluginConfiguration,
-            api.getPlugins().isEmpty() ? Orchestrator.Mode.LOCAL_ONLY : Orchestrator.Mode.SYNC_VIA_API
+            () -> api.getPlugins().isEmpty() ? Orchestrator.Mode.LOCAL_ONLY : Orchestrator.Mode.SYNC_VIA_API
         );
         this.userProvidedConfiguration = userProvidedConfiguration;
     }
